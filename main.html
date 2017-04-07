@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+	
+	<link rel="stylesheet" type="text/css"  href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+	<style>
+		.buffer-top{
+			margin-top: 20px;
+		}
+		
+		[ng\:cloak], [ng-cloak], .ng-cloak {
+			display: none;
+		}
+		.normal-width{
+			width: 50%;
+			max-width: 200px;
+		}
+		.inline-wrapper{
+			display: inline;
+		}
+	</style>
+</head>
+<body ng-app="myApp">
+<div class="container" ng-controller="myController">
+	<h1>API Tester</h1>
+	<hr>
+	<label>Encoding</label>
+	<form class="panel panel-default form-inline" style="padding: 5px 10px">
+		<div class="radio">
+			<label>
+				<input type="radio" ng-model="encoding" value="url">
+				URL encoded
+			</label>&nbsp;&nbsp;&nbsp;
+		</div>
+		<div class="radio">
+			<label>
+				<input type="radio" ng-model="encoding" value="json" checked>
+				JSON
+			</label>
+		</div>
+			
+	</form>
+	<label>location</label>
+	<div class="input-group">
+		<div class="input-group-addon">{{prefix}}</div>
+		<input class="form-control" ng-model="obj.loc"></input>
+	</div>
+	<br>
+	<span>{</span>
+	<div class="row">
+		<div class="col-xs-1"></div>
+		<div class="col-xs-11">
+			<div class="row" ng-repeat="prop in obj.props track by $index">
+				<div class="col-sm-3">
+					<div class="input-group">
+						<input class="form-control" ng-model="prop.key" placeholder="key"></input>
+						<div class="input-group-addon">:</div>
+					</div>
+				</div>
+				<div class="col-sm-3">
+					<div class="input-group">
+						<input class="form-control" ng-model="prop.val" placeholder="value"></input>
+						<div class="input-group-addon">{{getComma($index)}}</div>
+					</div>
+				</div>
+				<button type="button" class="btn btn-default" ng-click="removeProperty($index)">
+					<span class="glyphicon glyphicon-remove"></span>
+					remove
+				</button>
+			</div>
+		</div>
+	</div>
+	<span>}</span>
+	<br>
+	<button class="buffer-top btn btn-default" ng-click="addProperty()">Add Property</button>
+	<button class="buffer-top btn btn-default" ng-click="saveObject()">Save Object</button>
+	<button class="buffer-top btn btn-default" ng-click="loadObject()">Load Object</button>
+	<br>
+	<button class="buffer-top btn btn-primary" ng-click="submit()">Submit</button>
+	<table class="buffer-top table">
+		<tr>
+			<th>status</td>
+			<td>{{status}}<span ng-show="status"> - </span>{{statusText}}</td>
+		</tr>
+		<tr>
+			<th>typeof response</td>
+			<td>{{typeof}}</td>
+		</tr>
+		<tr>
+			<th>Content Type</td>
+			<td>{{contentType}}</td>
+		</tr>
+		<tr>
+			<th>called error function</td>
+			<td>{{error}}</td>
+		</tr>
+		<tr><td></td><td></td></tr>
+	</table>
+	<h2>Response</h2>
+	<hr>
+	<p ng-bind="response"></p> 
+</div>
+</body>
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.7/angular.min.js"></script>
+<script>
+	var app = angular.module('myApp', []);
+	app.controller("myController", function($scope, $http){
+		$scope.prefix = "http://";
+		$scope.obj = {};
+		$scope.obj.loc = "";
+		$scope.obj.props = [];
+		$scope.encoding = "url";
+		$scope.submit = function(){
+			var output = {};
+			for (var i = 0; i < $scope.obj.props.length; i++){
+				var prop = $scope.obj.props[i];
+				output[prop.key] = prop.val
+			}
+			if ($scope.encoding == "json"){
+				$http.post($scope.prefix + $scope.obj.loc, output).then(databaseHandler, errorHandler);
+			}
+			else {
+				$http({
+					method: 'POST',
+					url: $scope.prefix + $scope.obj.loc,
+					headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+					transformRequest: function(obj) {
+						var str = [];
+						for(var p in obj)
+						str.push(encodeURIComponent(p) + "=" + encodeURIComponent(obj[p]));
+						return str.join("&");
+					},
+					data: output
+				}).then(databaseHandler, errorHandler);
+			}
+			$scope.status = "";
+			$scope.response = "loading...";
+			$scope.statusText = "";
+			$scope.typeof = "";
+			$scope.contentType = "";
+			$scope.error = "";
+		}
+		$scope.addProperty = function(){
+			$scope.obj.props.push({key: "", val: ""});
+		}
+		$scope.removeProperty = function(index){
+			$scope.obj.props.splice(index, 1);
+		}
+		$scope.saveObject = function(){
+			localStorage["main"] = JSON.stringify($scope.obj)
+		}
+		$scope.loadObject = function(){
+			var stringObj = localStorage["main"];
+			if (typeof stringObj != "string"){
+				alert("nothing was saved");
+				return;
+			}
+			var storedObj = JSON.parse(stringObj);
+			if (typeof storedObj.loc == "string" && Array.isArray(storedObj.props)){
+				$scope.obj = storedObj;
+			} else {
+				alert("error loading object")
+			}
+		}
+		$scope.getComma = function(index){
+			if (index == $scope.obj.props.length - 1){
+				return "\xa0"; //non-breaking space
+			} 
+			return ",";
+		}
+		function databaseHandler(response){
+			$scope.error = "no";
+			generalHandler(response);
+		}
+		function errorHandler(response){
+			$scope.error = "yes";
+			generalHandler(response);
+		}
+		function generalHandler(response){
+			$scope.typeof = typeof response.data;
+			if ($scope.typeof == "object"){
+				$scope.response = JSON.stringify(response.data)
+			} else {
+				$scope.response = response.data;
+			}
+			$scope.status = response.status;
+			$scope.statusText =  response.statusText;
+			$scope.contentType = response.headers("Content-Type");
+		}
+	})
+</script>
+</html>
+	
