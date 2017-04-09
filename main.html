@@ -20,8 +20,13 @@
 </head>
 <body ng-app="myApp">
 <div class="container-fluid" ng-controller="mainCtrl as mainCtrl">
-	<label>{</label>
-	<div apit-object obj="mainCtrl.obj" indent="mainCtrl.indent"></div>
+	<div style="display: inline-block">
+		<div class="input-group">
+			<label>{</label>
+		</div>
+	</div>
+	<div apit-object obj="mainCtrl.obj" indent="mainCtrl.indent" type="object"></div>
+	<p>{{mainCtrl.obj}}</p>
 </div>
 </body>
 
@@ -34,6 +39,9 @@
 		self.obj = {
 			username: "josh",
 			age: 21,
+			arr: [
+				"josh"
+			],
 			obj1: {
 				obj2: {
 					obj3: {
