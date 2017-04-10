@@ -16,10 +16,39 @@
 			width: 30%;
 			margin-left: 0.5%;
 		}
+		.anchor{
+			cursor: pointer;
+		}
 	</style>
 </head>
 <body ng-app="myApp">
 <div class="container-fluid" ng-controller="mainCtrl as mainCtrl">
+	<h1>API Tester</h1>
+	<hr>
+	<label>Encoding</label>
+	<form class="panel panel-default form-inline" style="padding: 5px 10px">
+		<div class="radio">
+			<label>
+				<input type="radio" ng-model="mainCtrl.encoding" value="url">
+				URL encoded
+			</label>&nbsp;&nbsp;&nbsp;
+		</div>
+		<div class="radio">
+			<label>
+				<input type="radio" ng-model="mainCtrl.encoding" value="json" checked>
+				JSON
+			</label>
+		</div>		
+	</form>
+	
+	<label>Location</label>
+	<div class="input-group">
+		<div class="input-group-addon">{{prefix}}</div>
+		<input class="form-control" ng-model="mainCtrl.location"></input>
+	</div>
+	<br>
+	
+	<label>Data</label><br>
 	<div style="display: inline-block">
 		<div class="input-group">
 			<label>{</label>
@@ -27,31 +56,313 @@
 	</div>
 	<div apit-object obj="mainCtrl.obj" indent="mainCtrl.indent" type="object"></div>
 	<p>{{mainCtrl.obj}}</p>
+	<button class="buffer-top btn btn-primary" ng-click="mainCtrl.submit()">Submit</button>
+	<h2>Response</h2>
+	<hr>
+	{{mainCtrl.status}}<br>
+	{{mainCtrl.contentType}}<br>
+	<div ng-if="!mainCtrl.isHTML">
+		{{mainCtrl.response}}
+	</div>
+	<div ng-if="mainCtrl.isHTML" class="panel panel-default">
+		<div ng-bind-html="mainCtrl.renderHTML(mainCtrl.response)"></div>
+	</div>
 </div>
 </body>
 
 <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.7/angular.min.js"></script>
 <script>
 	var app = angular.module('myApp', []);
-	app.controller("mainCtrl", function(){
+	app.controller("mainCtrl", function(networkService, $sce){
 		var self = this;
 		self.indent = 1;
-		self.obj = {
-			username: "josh",
-			age: 21,
-			arr: [
-				"josh"
-			],
-			obj1: {
-				obj2: {
-					obj3: {
-						content: "empty"
+		self.encoding = "json";
+		self.obj = {};
+		self.location = "";
+		self.prefix = "";
+		self.status = "";
+		self.response = "";
+		self.contentType = "";
+		self.isHTML = false;
+		
+		self.submit = submit;
+		self.renderHTML = function(str){
+			var decoded = angular.element('<textarea />').html(str).text();
+            return $sce.trustAsHtml(decoded);
+		}
+		
+		function submit(){
+			var toSend = {};
+			toSend.location = self.prefix + "" + self.location;
+			toSend.encoding = self.encoding;
+			toSend.data = self.obj;
+			networkService.send(toSend, function(response){
+				self.status =  response.status + " " + response.statusText;
+				self.contentType = response.headers("Content-Type");
+				self.isHTML = false;
+				if (typeof response.data == "object"){
+					self.response = JSON.stringify(response.data, null, '  ');
+				}
+				else {
+					self.response = response.data;
+					if (self.contentType.indexOf("text/html") >= 0){
+						self.isHTML = true;
 					}
 				}
-			}
-		};
+			});
+		}
+		
+		
 	})
+	app.service("networkService", function($http){
+		var self = this;
+		self.send = send;;
+		
+		function send(obj, callback){
+			if (obj.encoding == "json"){
+				$http.post(obj.location, obj.data).then(callback, callback);
+			}
+			else {
+				$http({
+					method: 'POST',
+					url: obj.location,
+					headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+					transformRequest: function(obj) {
+						var str = [];
+						for(var key in obj){
+							str.push(encodeURIComponent(key) + "=" + encodeURIComponent(obj[key]));
+						}
+						return str.join("&");
+					},
+					data: obj.data
+				}).then(callback, callback);
+			}
+		}
+		
+	});
+	
+	app.directive("apitObject", function(){
+	var directive = {
+		template: '<div style="display: inline"><br>\
+			<div ng-repeat="prop in objCtrl.props track by $index">\
+				<div ng-if="objCtrl.type == \'object\'" class="input-wrapper" style="margin-left: {{objCtrl.indent*6}}%;">\
+					<div class="input-group" >\
+						<input class="form-control" ng-model="prop.key" ng-change="objCtrl.changed()" placeholder="key"></input>\
+						<div class="input-group-addon">:</div>\
+					</div>\
+				</div>\
+				<div ng-if="objCtrl.type == \'array\'" style="display: inline-block; margin-left: {{objCtrl.indent*6}}%;">\
+				</div>\
+				\
+				<div ng-if="prop.type == \'string\'" class="input-wrapper">\
+					<div class="input-group">\
+						<div class="input-group-addon">"</div>\
+						<input class="form-control" ng-model="prop.val" ng-change="objCtrl.changed()" placeholder="string"></input>\
+						<div class="input-group-addon">"&nbsp;{{objCtrl.getComma($index)}}</div>\
+					</div>\
+				</div>\
+				<div ng-if="prop.type == \'number\'" class="input-wrapper">\
+					<div class="input-group">\
+						<input type=number class="form-control" ng-model="prop.val" ng-change="objCtrl.changed()" placeholder="number"></input>\
+						<div class="input-group-addon">{{objCtrl.getComma($index)}}</div>\
+					</div>\
+				</div>\
+				<div ng-if="prop.type != \'object\' && prop.type != \'array\'" style="display: inline-block">\
+					<div class="input-group">\
+						<button type="button" class="btn btn-default" ng-click="objCtrl.removeProperty($index)">\
+							<span class="glyphicon glyphicon-remove"></span>&nbsp;remove\
+						</button>\
+					</div>\
+				</div>\
+				<div ng-if="prop.type == \'object\'" style="display: inline-block">\
+					<div class="input-group">\
+						<label>{</label>\
+					</div>\
+				</div>\
+				<div ng-if="prop.type == \'array\'" style="display: inline-block">\
+					<div class="input-group">\
+						<label>[</label>\
+					</div>\
+				</div>\
+				<div ng-if="prop.type ==\'object\'" apit-object obj="prop.val" indent="objCtrl.indent + 1" type="object" remove="objCtrl.removeProperty($index)"></div>\
+				<div ng-if="prop.type ==\'array\'" apit-object obj="prop.val" indent="objCtrl.indent + 1" type="array" remove="objCtrl.removeProperty($index)"></div>\
+			</div>\
+			<label ng-if="objCtrl.type ==\'object\'" style="margin-left: {{ (objCtrl.indent-1)*6 }}%;"> } </label>\
+			<label ng-if="objCtrl.type ==\'array\'" style="margin-left: {{ (objCtrl.indent-1)*6 }}%;"> ] </label>\
+			<div class="dropdown" dropdown style="display: inline-block; margin-bottom: 4px;">\
+				<ul class="dropdown-menu" style="display: block">\
+					<li class="" ng-click="objCtrl.addString()"><a class="anchor">string</a></li>\
+					<li class="" ng-click="objCtrl.addNumber()"><a class="anchor">number</a></li>\
+					<li class="" ng-click="objCtrl.addObject()"><a class="anchor">object</a></li>\
+					<li class="" ng-click="objCtrl.addArray()"><a class="anchor">array</a></li>\
+				</ul>\
+			</div>\
+			<div style="display: inline-block; margin-bottom: 4px;">\
+				<button ng-if="objCtrl.indent > 1" type="button" class="btn btn-default" ng-click="objCtrl.remove()">\
+						<span class="glyphicon glyphicon-remove"></span>&nbsp;remove\
+				</button>\
+				<button ng-if="objCtrl.indent == 1" type="button" class="btn btn-default" ng-click="objCtrl.removeAll()">\
+						<span class="glyphicon glyphicon-remove"></span>&nbsp;clear all\
+				</button>\
+			</div>\
+		</div>',
+        restrict: 'AE',
+		scope: {
+			indent: '=',
+            obj: '=',
+			type: '@',
+			remove: '&'
+        },
+		replace: true,
+        controller: objCtrl,
+        controllerAs: 'objCtrl',
+        bindToController: true
+    };
+    return directive;
+	
+	function objCtrl() {
+		var self = this;
+		self.props = getProps(self.obj);
+		self.getComma = getComma;
+		self.addString = addString;
+		self.addNumber = addNumber;
+		self.addObject = addObject;
+		self.addArray = addArray;
+		self.removeProperty = removeProperty;
+		self.removeAll = removeAll;
+		self.changed = changed;
+		
+		function addString(){
+			self.props.push({
+				key: "",
+				val: "",
+				type: "string"
+			})
+			changed();
+		}
+		function addNumber(){
+			self.props.push({
+				key: "",
+				val: "",
+				type: "number"
+			})
+			changed();
+		}
+		function addObject(){
+			self.props.push({
+				key: "",
+				val: {},
+				type: "object"
+			})
+			changed();
+		}
+		function addArray(){
+			self.props.push({
+				key: "",
+				val: [],
+				type: "array"
+			})
+			changed();
+		}
+		function removeProperty(index){
+			self.props.splice(index, 1);
+			changed();
+		}
+		function removeAll(){
+			for (var key in self.obj) {
+				if (self.obj.hasOwnProperty(key)) {
+					delete self.obj[key];
+				}
+			}
+			self.props = getProps();
+		}
+		function changed(){
+			if (self.type == "object"){
+				setObject(self.obj);
+			} else if (self.type == "array"){
+				setArray(self.obj);
+			} else {
+				alert("unknown type");
+			}
+		}
+		
+		function getComma(index){
+			if (index == self.props.length - 1){
+				return "\xa0"; //non-breaking space
+			} 
+			return ",";
+		}
+		
+		var setObject = function(obj){
+			for (var key in obj) {
+				if (obj.hasOwnProperty(key)) {
+					delete obj[key];
+				}
+			}
+			for (var i = 0; i < self.props.length; i++){
+				obj[self.props[i].key] = self.props[i].val;
+			}
+		}
+		var setArray = function(arr){
+			arr.splice(0, arr.length);
+			for (var i = 0; i < self.props.length; i++){
+				arr[i] = self.props[i].val;
+			}
+		}
+	}//end objCtrl
+	
+	function getProps(obj){
+		var props = [];
+		for (var key in obj) {
+			if (obj.hasOwnProperty(key)) {
+				var type = (Array.isArray(obj[key])) ? "array" : typeof obj[key];
+				props.push({
+					key: key,
+					val: obj[key],
+					type: type
+				});
+			}
+		}
+		return props;
+	}
+});
+
+app.directive("dropdown", function(){
+	function link(scope, element, attr){
+		scope.show = false;
+		var timeout;
+		element.on("mouseleave", function(){
+			out = true;
+			timeout = setTimeout(function(){
+				scope.$apply(function(){
+					scope.show = false;
+				});
+			}, 300);
+		});
+		element.on("mouseenter", function(){
+			clearTimeout(timeout);
+		});
+		scope.test = function(){
+			scope.show = false;
+		}
+	}
+	return {
+		restrict: "AE",
+		scope: {},
+		replace: true,
+		transclude: true,
+		link: link,
+		template: '<div ng-class="{dropdown: true, open: show}">\
+			<button type="button" class="btn btn-default" ng-click="show=!show">\
+				<span class="glyphicon glyphicon-plus"></span><span>&nbsp;add</span>\
+				<span class="caret"></span>\
+			</button>\
+			<div ng-click="test()" ng-if="show">\
+				<ng-transclude></ng-transclude>\
+			</div>\
+		</div>'
+	}
+});
 </script>
-<script src="object.js"></script>
 </html>
 	
