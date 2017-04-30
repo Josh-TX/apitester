@@ -70,9 +70,8 @@
 			<label>{</label>
 		</div>
 	</div>
-	<div apit-object obj="mainCtrl.obj" indent="mainCtrl.indent" type="object" refresh-obj="mainCtrl.refreshObj"></div>
+	<div apit-builder obj="mainCtrl.obj" indent="mainCtrl.indent" type="object" refresh-obj="mainCtrl.refreshObj"></div>
 	<br><br>
-	{{mainCtrl.obj}}
 	<button class="buffer-top btn btn-primary" ng-click="mainCtrl.submit()">Submit</button>
 	<button class="buffer-top btn btn-default" ng-click="mainCtrl.load()">load object</button>
 	<button class="buffer-top btn btn-default" ng-click="mainCtrl.save()">save object</button>
@@ -88,7 +87,70 @@
 	</div>
 </div>
 </body>
-
+<script type="text/ng-template" id="temp1.html">
+	<div style="display: inline"><br>
+		<div ng-repeat="prop in builderCtrl.props track by $index">
+			<div ng-if="builderCtrl.type == 'object'" class="input-wrapper" style="margin-left: {{builderCtrl.indent*6}}%;">
+				<div class="input-group" >
+					<input class="form-control" ng-model="prop.key" ng-change="builderCtrl.changed()" placeholder="key"></input>
+					<div class="input-group-addon">:</div>
+				</div>
+			</div>
+			<div ng-if="builderCtrl.type == 'array'" style="display: inline-block; margin-left: {{builderCtrl.indent*6}}%;">
+			</div>
+			<div ng-if="prop.type == 'string'" class="input-wrapper">
+				<div class="input-group">
+					<div class="input-group-addon">"</div>
+					<input class="form-control" ng-model="prop.val" ng-change="builderCtrl.changed()" placeholder="string"></input>
+					<div class="input-group-addon">"&nbsp;{{builderCtrl.getComma($index)}}</div>
+				</div>
+			</div>
+			<div ng-if="prop.type == 'number'" class="input-wrapper">
+				<div class="input-group">
+					<input type=number class="form-control" ng-model="prop.val" ng-change="builderCtrl.changed()" placeholder="number"></input>
+					<div class="input-group-addon">{{builderCtrl.getComma($index)}}</div>
+				</div>
+			</div>
+			<div ng-if="prop.type != 'object' && prop.type != 'array'" style="display: inline-block">
+				<div class="input-group">
+					<button type="button" class="btn btn-default" ng-click="builderCtrl.removeProperty($index)">
+						<span class="glyphicon glyphicon-remove"></span>&nbsp;remove
+					</button>
+				</div>
+			</div>
+			<div ng-if="prop.type == 'object'" style="display: inline-block">
+				<div class="input-group">
+					<label>{</label>
+				</div>
+			</div>
+			<div ng-if="prop.type == 'array'" style="display: inline-block">
+				<div class="input-group">
+					<label>[</label>
+				</div>
+			</div>
+			<div ng-if="prop.type =='object'" apit-builder obj="prop.val" indent="builderCtrl.indent + 1" type="object" remove="builderCtrl.removeProperty($index)" ></div>
+			<div ng-if="prop.type =='array'" apit-builder obj="prop.val" indent="builderCtrl.indent + 1" type="array" remove="builderCtrl.removeProperty($index)" ></div>
+		</div>
+		<label ng-if="builderCtrl.type =='object'" style="margin-left: {{ (builderCtrl.indent-1)*6 }}%;"> } </label>
+		<label ng-if="builderCtrl.type =='array'" style="margin-left: {{ (builderCtrl.indent-1)*6 }}%;"> ] </label>
+		<div class="dropdown" dropdown style="display: inline-block; margin-bottom: 4px;">
+			<ul class="dropdown-menu" style="display: block">
+				<li class="" ng-click="builderCtrl.addString()"><a class="anchor">string</a></li>
+				<li class="" ng-click="builderCtrl.addNumber()"><a class="anchor">number</a></li>
+				<li class="" ng-click="builderCtrl.addObject()"><a class="anchor">object</a></li>
+				<li class="" ng-click="builderCtrl.addArray()"><a class="anchor">array</a></li>
+			</ul>
+		</div>
+		<div style="display: inline-block; margin-bottom: 4px;">
+			<button ng-if="builderCtrl.indent > 1" type="button" class="btn btn-default" ng-click="builderCtrl.remove()">
+					<span class="glyphicon glyphicon-remove"></span>&nbsp;remove
+			</button>
+			<button ng-if="builderCtrl.indent == 1" type="button" class="btn btn-default" ng-click="builderCtrl.removeAll()">
+					<span class="glyphicon glyphicon-remove"></span>&nbsp;clear all
+			</button>
+		</div>
+	</div>
+</script>
 <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.7/angular.min.js"></script>
 <script>
 	var app = angular.module('myApp', []);
@@ -230,71 +292,9 @@
 		
 	});
 	
-	app.directive("apitObject", function(){
+	app.directive("apitBuilder", function(){
 	var directive = {
-		template: '<div style="display: inline"><br>\
-			<div ng-repeat="prop in objCtrl.props track by $index">\
-				<div ng-if="objCtrl.type == \'object\'" class="input-wrapper" style="margin-left: {{objCtrl.indent*6}}%;">\
-					<div class="input-group" >\
-						<input class="form-control" ng-model="prop.key" ng-change="objCtrl.changed()" placeholder="key"></input>\
-						<div class="input-group-addon">:</div>\
-					</div>\
-				</div>\
-				<div ng-if="objCtrl.type == \'array\'" style="display: inline-block; margin-left: {{objCtrl.indent*6}}%;">\
-				</div>\
-				\
-				<div ng-if="prop.type == \'string\'" class="input-wrapper">\
-					<div class="input-group">\
-						<div class="input-group-addon">"</div>\
-						<input class="form-control" ng-model="prop.val" ng-change="objCtrl.changed()" placeholder="string"></input>\
-						<div class="input-group-addon">"&nbsp;{{objCtrl.getComma($index)}}</div>\
-					</div>\
-				</div>\
-				<div ng-if="prop.type == \'number\'" class="input-wrapper">\
-					<div class="input-group">\
-						<input type=number class="form-control" ng-model="prop.val" ng-change="objCtrl.changed()" placeholder="number"></input>\
-						<div class="input-group-addon">{{objCtrl.getComma($index)}}</div>\
-					</div>\
-				</div>\
-				<div ng-if="prop.type != \'object\' && prop.type != \'array\'" style="display: inline-block">\
-					<div class="input-group">\
-						<button type="button" class="btn btn-default" ng-click="objCtrl.removeProperty($index)">\
-							<span class="glyphicon glyphicon-remove"></span>&nbsp;remove\
-						</button>\
-					</div>\
-				</div>\
-				<div ng-if="prop.type == \'object\'" style="display: inline-block">\
-					<div class="input-group">\
-						<label>{</label>\
-					</div>\
-				</div>\
-				<div ng-if="prop.type == \'array\'" style="display: inline-block">\
-					<div class="input-group">\
-						<label>[</label>\
-					</div>\
-				</div>\
-				<div ng-if="prop.type ==\'object\'" apit-object obj="prop.val" indent="objCtrl.indent + 1" type="object" remove="objCtrl.removeProperty($index)" ></div>\
-				<div ng-if="prop.type ==\'array\'" apit-object obj="prop.val" indent="objCtrl.indent + 1" type="array" remove="objCtrl.removeProperty($index)" ></div>\
-			</div>\
-			<label ng-if="objCtrl.type ==\'object\'" style="margin-left: {{ (objCtrl.indent-1)*6 }}%;"> } </label>\
-			<label ng-if="objCtrl.type ==\'array\'" style="margin-left: {{ (objCtrl.indent-1)*6 }}%;"> ] </label>\
-			<div class="dropdown" dropdown style="display: inline-block; margin-bottom: 4px;">\
-				<ul class="dropdown-menu" style="display: block">\
-					<li class="" ng-click="objCtrl.addString()"><a class="anchor">string</a></li>\
-					<li class="" ng-click="objCtrl.addNumber()"><a class="anchor">number</a></li>\
-					<li class="" ng-click="objCtrl.addObject()"><a class="anchor">object</a></li>\
-					<li class="" ng-click="objCtrl.addArray()"><a class="anchor">array</a></li>\
-				</ul>\
-			</div>\
-			<div style="display: inline-block; margin-bottom: 4px;">\
-				<button ng-if="objCtrl.indent > 1" type="button" class="btn btn-default" ng-click="objCtrl.remove()">\
-						<span class="glyphicon glyphicon-remove"></span>&nbsp;remove\
-				</button>\
-				<button ng-if="objCtrl.indent == 1" type="button" class="btn btn-default" ng-click="objCtrl.removeAll()">\
-						<span class="glyphicon glyphicon-remove"></span>&nbsp;clear all\
-				</button>\
-			</div>\
-		</div>',
+		templateUrl: 'temp1.html',
         restrict: 'AE',
 		scope: {
 			indent: '=',
@@ -304,13 +304,13 @@
 			refreshObj: '='
         },
 		replace: true,
-        controller: objCtrl,
-        controllerAs: 'objCtrl',
+        controller: builderCtrl,
+        controllerAs: 'builderCtrl',
         bindToController: true
     };
     return directive;
 	
-	function objCtrl() {
+	function builderCtrl() {
 		var self = this;
 		self.props = getProps(self.obj);
 		self.getComma = getComma;
@@ -406,7 +406,7 @@
 				arr[i] = self.props[i].val;
 			}
 		}
-	}//end objCtrl
+	}//end builderCtrl
 	
 	function getProps(obj){
 		var props = [];
