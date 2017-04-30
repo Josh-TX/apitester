@@ -37,26 +37,45 @@
 			<label>
 				<input type="radio" ng-model="mainCtrl.encoding" value="json" checked>
 				JSON
-			</label>
-		</div>		
+			</label>&nbsp;&nbsp;&nbsp;
+		</div>
+		<div class="radio">
+			<label>
+				<input type="radio" ng-model="mainCtrl.encoding" value="formData" checked>
+				Multipart/form-data
+			</label>&nbsp;&nbsp;&nbsp;
+		</div>
 	</form>
-	
+	<div ng-if="mainCtrl.encoding == 'formData'">
+		<label>File</label>
+		<div class="form-inline">
+			<div class="input-group" >
+				<input ng-disabled="mainCtrl.encoding != 'formData'" class="form-control" ng-model="mainCtrl.fileKey" placeholder="key"></input>
+				<div class="input-group-addon">:</div>
+			</div>
+			<input style="display: inline-block" type="file" id="file" onchange="angular.element(this).scope().mainCtrl.fileChanged()">
+		</div>
+		<br>
+	</div>
 	<label>Location</label>
 	<div class="input-group">
 		<div class="input-group-addon">{{prefix}}</div>
 		<input class="form-control" ng-model="mainCtrl.location"></input>
 	</div>
 	<br>
-	
+
 	<label>Data</label><br>
 	<div style="display: inline-block">
 		<div class="input-group">
 			<label>{</label>
 		</div>
 	</div>
-	<div apit-object obj="mainCtrl.obj" indent="mainCtrl.indent" type="object"></div>
-	<p>{{mainCtrl.obj}}</p>
+	<div apit-object obj="mainCtrl.obj" indent="mainCtrl.indent" type="object" refresh-obj="mainCtrl.refreshObj"></div>
+	<br><br>
+	{{mainCtrl.obj}}
 	<button class="buffer-top btn btn-primary" ng-click="mainCtrl.submit()">Submit</button>
+	<button class="buffer-top btn btn-default" ng-click="mainCtrl.load()">load object</button>
+	<button class="buffer-top btn btn-default" ng-click="mainCtrl.save()">save object</button>
 	<h2>Response</h2>
 	<hr>
 	{{mainCtrl.status}}<br>
@@ -73,7 +92,7 @@
 <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.7/angular.min.js"></script>
 <script>
 	var app = angular.module('myApp', []);
-	app.controller("mainCtrl", function(networkService, $sce){
+	app.controller("mainCtrl", function(networkService, $sce, $timeout){
 		var self = this;
 		self.indent = 1;
 		self.encoding = "json";
@@ -84,8 +103,13 @@
 		self.response = "";
 		self.contentType = "";
 		self.isHTML = false;
+		self.refreshObj = {};
+		self.fileKey = "";
 		
+		self.load = load;
+		self.save = save;
 		self.submit = submit;
+		self.fileChanged = fileChanged
 		self.renderHTML = function(str){
 			var decoded = angular.element('<textarea />').html(str).text();
             return $sce.trustAsHtml(decoded);
@@ -96,6 +120,10 @@
 			toSend.location = self.prefix + "" + self.location;
 			toSend.encoding = self.encoding;
 			toSend.data = self.obj;
+			if (self.encoding == "formData"){
+				toSend.fileKey = self.fileKey;
+				toSend.file = document.getElementById("file").files[0];
+			}
 			networkService.send(toSend, function(response){
 				self.status =  response.status + " " + response.statusText;
 				self.contentType = response.headers("Content-Type");
@@ -111,18 +139,55 @@
 				}
 			});
 		}
-		
-		
+		function load(){
+			var objString = localStorage["main"];
+			if (typeof objString == "string"){
+				var newObj = JSON.parse(objString);
+			} else {
+				alert("nothing saved");
+				return;
+			}
+			self.location = newObj.location;
+			self.encoding = newObj.encoding;
+			var data = newObj.data;
+			for (var key in self.obj) {
+				if (self.obj.hasOwnProperty(key)) {
+					delete self.obj[key];
+				}
+			}
+			for (var key in data) {
+				self.obj[key] = data[key];
+			}
+			if (typeof self.refreshObj.refresh == "function")
+				self.refreshObj.refresh();
+		}
+		function save(){
+			var toSave = {};
+			toSave.data = self.obj;
+			toSave.encoding = self.encoding;
+			toSave.location = self.location;
+			localStorage["main"] = JSON.stringify(toSave);
+		}
+		function fileChanged(){
+			$timeout();
+			self.encoding = "formData";
+		}
 	})
+	
 	app.service("networkService", function($http){
 		var self = this;
 		self.send = send;;
 		
 		function send(obj, callback){
 			if (obj.encoding == "json"){
-				$http.post(obj.location, obj.data).then(callback, callback);
+				$http({
+					method: 'POST',
+					url: obj.location,
+					transformResponse: undefined,
+					data: obj.data
+				}).then(callback, callback);
 			}
-			else {
+			else if (obj.encoding == "url"){
 				$http({
 					method: 'POST',
 					url: obj.location,
@@ -134,7 +199,31 @@
 						}
 						return str.join("&");
 					},
+					transformResponse: undefined,
 					data: obj.data
+				}).then(callback, callback);
+			}
+			else if (obj.encoding == "formData"){
+				var formData = new FormData();
+				for(var key in obj.data){
+					formData.append(key, obj.data[key])
+				}
+				if (obj.file){
+					formData.append(obj.fileKey, obj.file, obj.file.name)
+				}
+				else {
+					alert("no file")
+					formData.append(obj.fileKey, obj.file, "");
+				}
+				$http({
+					method: 'POST',
+					url: obj.location,
+					headers: { 'Content-Type': undefined },
+					transformRequest: function(obj) {
+						return formData;
+					},
+					transformResponse: undefined,
+					data: {}
 				}).then(callback, callback);
 			}
 		}
@@ -184,8 +273,8 @@
 						<label>[</label>\
 					</div>\
 				</div>\
-				<div ng-if="prop.type ==\'object\'" apit-object obj="prop.val" indent="objCtrl.indent + 1" type="object" remove="objCtrl.removeProperty($index)"></div>\
-				<div ng-if="prop.type ==\'array\'" apit-object obj="prop.val" indent="objCtrl.indent + 1" type="array" remove="objCtrl.removeProperty($index)"></div>\
+				<div ng-if="prop.type ==\'object\'" apit-object obj="prop.val" indent="objCtrl.indent + 1" type="object" remove="objCtrl.removeProperty($index)" ></div>\
+				<div ng-if="prop.type ==\'array\'" apit-object obj="prop.val" indent="objCtrl.indent + 1" type="array" remove="objCtrl.removeProperty($index)" ></div>\
 			</div>\
 			<label ng-if="objCtrl.type ==\'object\'" style="margin-left: {{ (objCtrl.indent-1)*6 }}%;"> } </label>\
 			<label ng-if="objCtrl.type ==\'array\'" style="margin-left: {{ (objCtrl.indent-1)*6 }}%;"> ] </label>\
@@ -211,7 +300,8 @@
 			indent: '=',
             obj: '=',
 			type: '@',
-			remove: '&'
+			remove: '&',
+			refreshObj: '='
         },
 		replace: true,
         controller: objCtrl,
@@ -231,6 +321,13 @@
 		self.removeProperty = removeProperty;
 		self.removeAll = removeAll;
 		self.changed = changed;
+		
+		if (typeof self.refreshObj == "object"){
+			self.refreshObj.refresh = refresh;
+		}
+		function refresh(){
+			self.props = getProps(self.obj);
+		}
 		
 		function addString(){
 			self.props.push({
